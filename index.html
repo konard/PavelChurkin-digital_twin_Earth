@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Цифровой Двойник Земли - Минеральные Ресурсы</title>
+
+    <!-- Cesium CSS -->
+    <link href="https://cesium.com/downloads/cesiumjs/releases/1.112/Build/Cesium/Widgets/widgets.css" rel="stylesheet">
+
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            overflow: hidden;
+        }
+
+        #cesiumContainer {
+            width: 100vw;
+            height: 100vh;
+        }
+
+        #toolbar {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background: rgba(42, 42, 42, 0.9);
+            padding: 15px;
+            border-radius: 8px;
+            color: white;
+            max-width: 300px;
+            backdrop-filter: blur(10px);
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+            z-index: 1000;
+        }
+
+        #toolbar h1 {
+            font-size: 18px;
+            margin-bottom: 10px;
+            color: #4FC3F7;
+        }
+
+        #toolbar p {
+            font-size: 12px;
+            margin-bottom: 15px;
+            color: #B0BEC5;
+        }
+
+        .control-group {
+            margin-bottom: 15px;
+        }
+
+        .control-group label {
+            display: block;
+            font-size: 12px;
+            margin-bottom: 5px;
+            color: #CFD8DC;
+        }
+
+        .control-group select,
+        .control-group input {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #455A64;
+            border-radius: 4px;
+            background: #263238;
+            color: white;
+            font-size: 12px;
+        }
+
+        .control-group button {
+            width: 100%;
+            padding: 10px;
+            border: none;
+            border-radius: 4px;
+            background: #4FC3F7;
+            color: white;
+            font-size: 13px;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+
+        .control-group button:hover {
+            background: #29B6F6;
+        }
+
+        #stats {
+            position: absolute;
+            bottom: 10px;
+            left: 10px;
+            background: rgba(42, 42, 42, 0.9);
+            padding: 10px 15px;
+            border-radius: 8px;
+            color: white;
+            font-size: 12px;
+            backdrop-filter: blur(10px);
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+            z-index: 1000;
+        }
+
+        #loading {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(42, 42, 42, 0.95);
+            padding: 30px 50px;
+            border-radius: 8px;
+            color: white;
+            font-size: 16px;
+            z-index: 2000;
+            text-align: center;
+        }
+
+        .spinner {
+            border: 3px solid rgba(255, 255, 255, 0.3);
+            border-top: 3px solid #4FC3F7;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 20px auto 10px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .hidden {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div id="cesiumContainer"></div>
+
+    <div id="toolbar">
+        <h1>🌍 Цифровой Двойник Земли</h1>
+        <p>Минеральные ресурсы мира (USGS MRDS)</p>
+
+        <div class="control-group">
+            <label for="commodityFilter">Фильтр по ресурсу:</label>
+            <select id="commodityFilter">
+                <option value="">Все ресурсы</option>
+            </select>
+        </div>
+
+        <div class="control-group">
+            <button id="loadDataBtn">Загрузить данные</button>
+        </div>
+    </div>
+
+    <div id="stats">
+        <div>Отображено точек: <span id="pointCount">0</span></div>
+        <div>Всего в базе: <span id="totalCount">304,613</span></div>
+    </div>
+
+    <div id="loading" class="hidden">
+        <div class="spinner"></div>
+        <div>Загрузка данных...</div>
+    </div>
+
+    <!-- Cesium JS -->
+    <script src="https://cesium.com/downloads/cesiumjs/releases/1.112/Build/Cesium/Cesium.js"></script>
+
+    <script>
+        // Cesium Ion token (using default token for demo)
+        Cesium.Ion.defaultAccessToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiJlYWE1OWUxNy1mMWZiLTQzYjYtYTQ0OS1kMWFjYmFkNjc5YzciLCJpZCI6NTc3MzMsImlhdCI6MTYyNzg0NTE4Mn0.XcKpgANiY19MC4bdFUXMVEBToBmqS8kuYpUlxJHYZxk';
+
+        // Initialize the Cesium Viewer
+        const viewer = new Cesium.Viewer('cesiumContainer', {
+            baseLayerPicker: true,
+            geocoder: true,
+            homeButton: true,
+            sceneModePicker: true,
+            navigationHelpButton: true,
+            animation: false,
+            timeline: false,
+            fullscreenButton: true,
+            vrButton: false
+        });
+
+        // Set initial camera position to show the whole Earth
+        viewer.camera.setView({
+            destination: Cesium.Cartesian3.fromDegrees(0, 30, 20000000),
+            orientation: {
+                heading: 0.0,
+                pitch: -Cesium.Math.PI_OVER_TWO,
+                roll: 0.0
+            }
+        });
+
+        // Global variables
+        let allData = null;
+        let currentDataSource = null;
+        let commodities = new Set();
+
+        // Color mapping for different commodities
+        const commodityColors = {
+            'Gold': Cesium.Color.GOLD,
+            'Silver': Cesium.Color.SILVER,
+            'Copper': Cesium.Color.CHOCOLATE,
+            'Iron': Cesium.Color.DARKRED,
+            'Uranium': Cesium.Color.LIME,
+            'Coal': Cesium.Color.BLACK,
+            'Chromium': Cesium.Color.DARKGRAY,
+            'Tungsten': Cesium.Color.GRAY,
+            'Manganese': Cesium.Color.PURPLE,
+            'Mercury': Cesium.Color.LIGHTGRAY,
+            'Tin': Cesium.Color.LIGHTSTEELBLUE,
+            'Lead': Cesium.Color.DARKSLATEGRAY
+        };
+
+        // Function to get color for commodity
+        function getColorForCommodity(commodity) {
+            if (commodityColors[commodity]) {
+                return commodityColors[commodity];
+            }
+            return Cesium.Color.CYAN;
+        }
+
+        // Load GeoJSON data
+        async function loadData() {
+            const loadingDiv = document.getElementById('loading');
+            const loadBtn = document.getElementById('loadDataBtn');
+
+            loadingDiv.classList.remove('hidden');
+            loadBtn.disabled = true;
+
+            try {
+                const response = await fetch('data/mrds.geojson');
+                const geojson = await response.json();
+
+                allData = geojson;
+
+                // Extract unique commodities
+                geojson.features.forEach(feature => {
+                    const commodity = feature.properties.commodity;
+                    if (commodity) {
+                        commodities.add(commodity);
+                    }
+                });
+
+                // Populate commodity filter
+                const select = document.getElementById('commodityFilter');
+                const sortedCommodities = Array.from(commodities).sort();
+                sortedCommodities.forEach(commodity => {
+                    const option = document.createElement('option');
+                    option.value = commodity;
+                    option.textContent = commodity;
+                    select.appendChild(option);
+                });
+
+                // Display all data initially
+                displayData(geojson);
+
+                loadingDiv.classList.add('hidden');
+                loadBtn.textContent = 'Данные загружены';
+
+            } catch (error) {
+                console.error('Error loading data:', error);
+                loadingDiv.textContent = 'Ошибка загрузки данных: ' + error.message;
+                loadBtn.disabled = false;
+            }
+        }
+
+        // Display data on globe
+        function displayData(geojson) {
+            // Remove previous data source if exists
+            if (currentDataSource) {
+                viewer.dataSources.remove(currentDataSource);
+            }
+
+            // Create new data source
+            currentDataSource = new Cesium.CustomDataSource('mrds');
+
+            let displayedCount = 0;
+
+            // Add points to the globe
+            geojson.features.forEach(feature => {
+                const coords = feature.properties;
+                const lon = feature.geometry.coordinates[0];
+                const lat = feature.geometry.coordinates[1];
+                const commodity = coords.commodity || 'Unknown';
+
+                const entity = currentDataSource.entities.add({
+                    position: Cesium.Cartesian3.fromDegrees(lon, lat),
+                    point: {
+                        pixelSize: 5,
+                        color: getColorForCommodity(commodity),
+                        outlineColor: Cesium.Color.WHITE,
+                        outlineWidth: 1
+                    },
+                    description: `
+                        <h3>${coords.name}</h3>
+                        <p><strong>Ресурс:</strong> ${commodity}</p>
+                        ${coords.commodity2 ? `<p><strong>Доп. ресурс:</strong> ${coords.commodity2}</p>` : ''}
+                        ${coords.commodity3 ? `<p><strong>Доп. ресурс:</strong> ${coords.commodity3}</p>` : ''}
+                        <p><strong>Страна:</strong> ${coords.country}</p>
+                        ${coords.state ? `<p><strong>Штат/Регион:</strong> ${coords.state}</p>` : ''}
+                        <p><strong>Статус:</strong> ${coords.dev_status}</p>
+                        ${coords.url ? `<p><a href="${coords.url}" target="_blank">Подробнее</a></p>` : ''}
+                    `
+                });
+
+                displayedCount++;
+            });
+
+            viewer.dataSources.add(currentDataSource);
+
+            // Update stats
+            document.getElementById('pointCount').textContent = displayedCount.toLocaleString('ru-RU');
+        }
+
+        // Filter data by commodity
+        document.getElementById('commodityFilter').addEventListener('change', function(e) {
+            const selectedCommodity = e.target.value;
+
+            if (!allData) return;
+
+            if (selectedCommodity === '') {
+                displayData(allData);
+            } else {
+                const filtered = {
+                    type: 'FeatureCollection',
+                    features: allData.features.filter(f =>
+                        f.properties.commodity === selectedCommodity ||
+                        f.properties.commodity2 === selectedCommodity ||
+                        f.properties.commodity3 === selectedCommodity
+                    )
+                };
+                displayData(filtered);
+            }
+        });
+
+        // Load data button
+        document.getElementById('loadDataBtn').addEventListener('click', loadData);
+
+        // Auto-load data on page load (optional - remove if you want manual loading)
+        window.addEventListener('load', () => {
+            // Uncomment to auto-load:
+            // loadData();
+        });
+    </script>
+</body>
+</html>

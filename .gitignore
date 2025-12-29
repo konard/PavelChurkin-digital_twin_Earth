@@ -1,0 +1,27 @@
+# Large data files
+data/mrds.csv
+data/mrds.geojson
+data/mrds-csv.zip
+
+# Keep the scripts and metadata
+!data/*.py
+!data/*.met
+!data/README.md
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+
+# OS files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Logs
+*.log
