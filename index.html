@@ -6,7 +6,7 @@
     <title>Цифровой Двойник Земли - Минеральные Ресурсы</title>
 
     <!-- Cesium CSS -->
-    <link href="https://cesium.com/downloads/cesiumjs/releases/1.112/Build/Cesium/Widgets/widgets.css" rel="stylesheet">
+    <link href="libs/Build/Cesium/Widgets/widgets.css" rel="stylesheet">
 
     <style>
         * {
@@ -167,24 +167,119 @@
     </div>
 
     <!-- Cesium JS -->
-    <script src="https://cesium.com/downloads/cesiumjs/releases/1.112/Build/Cesium/Cesium.js"></script>
+    <script src="libs/Build/Cesium/Cesium.js"></script>
 
     <script>
-        // Cesium Ion token (using default token for demo)
-        Cesium.Ion.defaultAccessToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiJlYWE1OWUxNy1mMWZiLTQzYjYtYTQ0OS1kMWFjYmFkNjc5YzciLCJpZCI6NTc3MzMsImlhdCI6MTYyNzg0NTE4Mn0.XcKpgANiY19MC4bdFUXMVEBToBmqS8kuYpUlxJHYZxk';
+        // Set Cesium base URL for Workers and Assets
+        window.CESIUM_BASE_URL = 'libs/Build/Cesium/';
 
-        // Initialize the Cesium Viewer
-        const viewer = new Cesium.Viewer('cesiumContainer', {
-            baseLayerPicker: true,
-            geocoder: true,
-            homeButton: true,
-            sceneModePicker: true,
-            navigationHelpButton: true,
-            animation: false,
-            timeline: false,
-            fullscreenButton: true,
-            vrButton: false
-        });
+        // Check if Cesium loaded successfully
+        if (typeof Cesium === 'undefined') {
+            document.body.innerHTML = `
+                <div style="position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+                            background: rgba(42, 42, 42, 0.95); padding: 40px; border-radius: 8px;
+                            color: white; max-width: 600px; text-align: left; font-family: 'Segoe UI', sans-serif;">
+                    <h2 style="color: #FF6B6B; margin-bottom: 20px;">❌ Ошибка загрузки Cesium</h2>
+                    <p style="margin-bottom: 15px;">Библиотека Cesium не загрузилась. Это может происходить по следующим причинам:</p>
+                    <ul style="margin-bottom: 20px; padding-left: 20px;">
+                        <li style="margin-bottom: 10px;"><strong>Файл открыт напрямую (file://)</strong> - Cesium требует веб-сервер</li>
+                        <li style="margin-bottom: 10px;"><strong>Файлы Cesium отсутствуют в папке libs/</strong> - Проверьте структуру проекта</li>
+                        <li style="margin-bottom: 10px;"><strong>Проблема с путями к файлам</strong> - Убедитесь, что запускаете сервер из корня проекта</li>
+                    </ul>
+                    <div style="background: rgba(76, 175, 80, 0.2); border-left: 4px solid #4CAF50; padding: 15px; border-radius: 4px; margin-bottom: 20px;">
+                        <h3 style="margin-bottom: 10px; color: #4CAF50;">✅ Решение:</h3>
+                        <p style="margin-bottom: 10px;">Запустите локальный веб-сервер из корневой папки проекта:</p>
+                        <code style="display: block; background: rgba(0,0,0,0.4); padding: 10px; border-radius: 4px; font-family: monospace;">
+                            python3 -m http.server 8000
+                        </code>
+                        <p style="margin-top: 10px;">Затем откройте в браузере: <strong style="color: #4FC3F7;">http://localhost:8000</strong></p>
+                    </div>
+                    <p style="font-size: 12px; color: #B0BEC5;">Подробнее в файле README.md</p>
+                </div>
+            `;
+            throw new Error('Cesium library failed to load');
+        }
+
+        // Check if running from file:// protocol
+        if (window.location.protocol === 'file:') {
+            document.body.innerHTML = `
+                <div style="position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+                            background: rgba(42, 42, 42, 0.95); padding: 40px; border-radius: 8px;
+                            color: white; max-width: 600px; text-align: left; font-family: 'Segoe UI', sans-serif;">
+                    <h2 style="color: #FF6B6B; margin-bottom: 20px;">⚠️ Неподдерживаемый протокол</h2>
+                    <p style="margin-bottom: 15px;">Вы открыли файл напрямую через протокол <code style="background: rgba(255,255,255,0.1); padding: 2px 6px; border-radius: 3px;">file://</code></p>
+                    <p style="margin-bottom: 20px;">Cesium требует запуск через веб-сервер из-за ограничений безопасности браузера (CORS и Web Workers).</p>
+                    <div style="background: rgba(76, 175, 80, 0.2); border-left: 4px solid #4CAF50; padding: 15px; border-radius: 4px; margin-bottom: 20px;">
+                        <h3 style="margin-bottom: 15px; color: #4CAF50;">✅ Как запустить правильно:</h3>
+                        <p style="margin-bottom: 10px;"><strong>1. Откройте терминал в папке проекта</strong></p>
+                        <p style="margin-bottom: 10px;"><strong>2. Запустите веб-сервер:</strong></p>
+                        <code style="display: block; background: rgba(0,0,0,0.4); padding: 10px; border-radius: 4px; font-family: monospace; margin-bottom: 15px;">
+                            python3 -m http.server 8000
+                        </code>
+                        <p style="margin-bottom: 5px;"><strong>3. Откройте в браузере:</strong></p>
+                        <a href="http://localhost:8000" style="display: block; background: #4FC3F7; color: white; padding: 12px; text-align: center; border-radius: 4px; text-decoration: none; font-weight: bold; margin-bottom: 10px;">
+                            http://localhost:8000
+                        </a>
+                        <p style="font-size: 11px; color: #90A4AE; margin-top: 10px;">Альтернатива (Node.js): <code style="background: rgba(255,255,255,0.1); padding: 2px 4px; border-radius: 2px;">npx http-server</code></p>
+                    </div>
+                    <p style="font-size: 12px; color: #B0BEC5; margin-bottom: 15px;">Подробнее в файле README.md</p>
+                    <div style="background: rgba(255,152,0,0.1); border-left: 4px solid #FF9800; padding: 10px; border-radius: 4px;">
+                        <p style="font-size: 11px; color: #FFB74D; margin: 0;"><strong>Текущий URL:</strong> ${window.location.href}</p>
+                    </div>
+                </div>
+            `;
+            throw new Error('Application must be served via HTTP/HTTPS protocol, not file://');
+        }
+
+        // Disable Cesium Ion (using free OpenStreetMap instead)
+        Cesium.Ion.defaultAccessToken = undefined;
+
+        // Initialize the Cesium Viewer with OpenStreetMap imagery (no token required)
+        let viewer;
+        try {
+            viewer = new Cesium.Viewer('cesiumContainer', {
+                baseLayerPicker: false,  // Disable base layer picker to avoid Ion dependency
+                geocoder: true,
+                homeButton: true,
+                sceneModePicker: true,
+                navigationHelpButton: true,
+                animation: false,
+                timeline: false,
+                fullscreenButton: true,
+                vrButton: false,
+                imageryProvider: new Cesium.OpenStreetMapImageryProvider({
+                    url: 'https://tile.openstreetmap.org/'
+                }),
+                terrainProvider: new Cesium.EllipsoidTerrainProvider()  // Use simple ellipsoid terrain
+            });
+        } catch (error) {
+            console.error('Failed to initialize Cesium Viewer:', error);
+            document.body.innerHTML = `
+                <div style="position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+                            background: rgba(42, 42, 42, 0.95); padding: 40px; border-radius: 8px;
+                            color: white; max-width: 600px; text-align: left; font-family: 'Segoe UI', sans-serif;">
+                    <h2 style="color: #FF6B6B; margin-bottom: 20px;">❌ Ошибка инициализации 3D-глобуса</h2>
+                    <p style="margin-bottom: 15px;">Не удалось создать 3D-сцену Cesium.</p>
+                    <div style="background: rgba(255,255,255,0.05); padding: 15px; border-radius: 4px; margin-bottom: 20px; font-family: monospace; font-size: 12px; overflow-x: auto;">
+                        ${error.message}
+                    </div>
+                    <p style="margin-bottom: 10px;"><strong>Возможные причины:</strong></p>
+                    <ul style="margin-bottom: 20px; padding-left: 20px; font-size: 14px;">
+                        <li style="margin-bottom: 8px;">Браузер не поддерживает WebGL</li>
+                        <li style="margin-bottom: 8px;">Файл открыт через file:// вместо http://</li>
+                        <li style="margin-bottom: 8px;">Устаревшая версия браузера</li>
+                    </ul>
+                    <div style="background: rgba(76, 175, 80, 0.2); border-left: 4px solid #4CAF50; padding: 15px; border-radius: 4px;">
+                        <p style="margin-bottom: 10px;"><strong>Запустите веб-сервер:</strong></p>
+                        <code style="display: block; background: rgba(0,0,0,0.4); padding: 10px; border-radius: 4px;">
+                            python3 -m http.server 8000
+                        </code>
+                        <p style="margin-top: 10px;">Откройте: <strong style="color: #4FC3F7;">http://localhost:8000</strong></p>
+                    </div>
+                </div>
+            `;
+            throw error;
+        }
 
         // Set initial camera position to show the whole Earth
         viewer.camera.setView({
