@@ -170,9 +170,11 @@
     <script src="libs/Build/Cesium/Cesium.js"></script>
 
     <script>
-        // Set Cesium base URL for Workers and Assets
+        // Set Cesium base URL for Workers and Assets - must be set before Cesium initializes
         window.CESIUM_BASE_URL = 'libs/Build/Cesium/';
 
+        // Wait for DOM and Cesium to be fully loaded before initializing
+        function initializeCesium() {
         // Check if Cesium loaded successfully
         if (typeof Cesium === 'undefined') {
             document.body.innerHTML = `
@@ -470,6 +472,15 @@
             // Uncomment to auto-load:
             // loadData();
         });
+        } // End of initializeCesium function
+
+        // Initialize Cesium when DOM is ready
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', initializeCesium);
+        } else {
+            // DOM is already loaded, initialize immediately
+            initializeCesium();
+        }
     </script>
 </body>
 </html>
