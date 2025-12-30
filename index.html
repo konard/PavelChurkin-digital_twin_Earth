@@ -235,7 +235,19 @@
 
             try {
                 const response = await fetch('data/mrds.geojson');
+
+                if (!response.ok) {
+                    if (response.status === 404) {
+                        throw new Error('Файл данных не найден. Пожалуйста, скачайте и сконвертируйте данные согласно инструкции в data/README.md');
+                    }
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+
                 const geojson = await response.json();
+
+                if (!geojson.features || geojson.features.length === 0) {
+                    throw new Error('Файл данных пуст или имеет неверный формат');
+                }
 
                 allData = geojson;
 
@@ -265,8 +277,24 @@
 
             } catch (error) {
                 console.error('Error loading data:', error);
-                loadingDiv.textContent = 'Ошибка загрузки данных: ' + error.message;
+                loadingDiv.innerHTML = `
+                    <div style="color: #FF6B6B; max-width: 400px;">
+                        <h3 style="margin-bottom: 10px;">❌ Ошибка загрузки данных</h3>
+                        <p style="margin-bottom: 15px;">${error.message}</p>
+                        <div style="background: rgba(0,0,0,0.3); padding: 10px; border-radius: 4px; text-align: left; font-size: 11px;">
+                            <strong>Инструкция по установке данных:</strong><br><br>
+                            1. Скачайте данные:<br>
+                            <code style="background: rgba(255,255,255,0.1); padding: 2px 4px; border-radius: 2px;">curl -L -o data/mrds-csv.zip https://mrdata.usgs.gov/mrds/mrds-csv.zip</code><br><br>
+                            2. Распакуйте архив:<br>
+                            <code style="background: rgba(255,255,255,0.1); padding: 2px 4px; border-radius: 2px;">unzip data/mrds-csv.zip -d data/</code><br><br>
+                            3. Конвертируйте в GeoJSON:<br>
+                            <code style="background: rgba(255,255,255,0.1); padding: 2px 4px; border-radius: 2px;">python3 data/convert_to_geojson.py</code><br><br>
+                            Подробнее: <a href="data/README.md" style="color: #4FC3F7;">data/README.md</a>
+                        </div>
+                    </div>
+                `;
                 loadBtn.disabled = false;
+                loadBtn.textContent = 'Повторить загрузку';
             }
         }
 

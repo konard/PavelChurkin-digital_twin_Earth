@@ -1,0 +1,185 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [-122.4194, 37.7749]
+      },
+      "properties": {
+        "id": "10000001",
+        "name": "Sample Gold Mine - San Francisco",
+        "commodity": "Gold",
+        "commodity2": "",
+        "commodity3": "",
+        "country": "United States",
+        "state": "California",
+        "dev_status": "Producer",
+        "url": ""
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [-74.0060, 40.7128]
+      },
+      "properties": {
+        "id": "10000002",
+        "name": "Sample Silver Deposit - New York",
+        "commodity": "Silver",
+        "commodity2": "",
+        "commodity3": "",
+        "country": "United States",
+        "state": "New York",
+        "dev_status": "Prospect",
+        "url": ""
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [37.6173, 55.7558]
+      },
+      "properties": {
+        "id": "10000003",
+        "name": "Sample Iron Mine - Moscow",
+        "commodity": "Iron",
+        "commodity2": "",
+        "commodity3": "",
+        "country": "Russia",
+        "state": "Moscow Oblast",
+        "dev_status": "Producer",
+        "url": ""
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [2.3522, 48.8566]
+      },
+      "properties": {
+        "id": "10000004",
+        "name": "Sample Copper Mine - Paris",
+        "commodity": "Copper",
+        "commodity2": "Gold",
+        "commodity3": "",
+        "country": "France",
+        "state": "Île-de-France",
+        "dev_status": "Past Producer",
+        "url": ""
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [139.6917, 35.6895]
+      },
+      "properties": {
+        "id": "10000005",
+        "name": "Sample Manganese Deposit - Tokyo",
+        "commodity": "Manganese",
+        "commodity2": "",
+        "commodity3": "",
+        "country": "Japan",
+        "state": "Tokyo",
+        "dev_status": "Prospect",
+        "url": ""
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [-58.3816, -34.6037]
+      },
+      "properties": {
+        "id": "10000006",
+        "name": "Sample Uranium Mine - Buenos Aires",
+        "commodity": "Uranium",
+        "commodity2": "",
+        "commodity3": "",
+        "country": "Argentina",
+        "state": "Buenos Aires",
+        "dev_status": "Producer",
+        "url": ""
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [151.2093, -33.8688]
+      },
+      "properties": {
+        "id": "10000007",
+        "name": "Sample Coal Mine - Sydney",
+        "commodity": "Coal",
+        "commodity2": "",
+        "commodity3": "",
+        "country": "Australia",
+        "state": "New South Wales",
+        "dev_status": "Producer",
+        "url": ""
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [18.4241, -33.9249]
+      },
+      "properties": {
+        "id": "10000008",
+        "name": "Sample Chromium Mine - Cape Town",
+        "commodity": "Chromium",
+        "commodity2": "",
+        "commodity3": "",
+        "country": "South Africa",
+        "state": "Western Cape",
+        "dev_status": "Producer",
+        "url": ""
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [116.4074, 39.9042]
+      },
+      "properties": {
+        "id": "10000009",
+        "name": "Sample Tungsten Mine - Beijing",
+        "commodity": "Tungsten",
+        "commodity2": "",
+        "commodity3": "",
+        "country": "China",
+        "state": "Beijing",
+        "dev_status": "Producer",
+        "url": ""
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [-43.1729, -22.9068]
+      },
+      "properties": {
+        "id": "10000010",
+        "name": "Sample Gold Mine - Rio de Janeiro",
+        "commodity": "Gold",
+        "commodity2": "Silver",
+        "commodity3": "",
+        "country": "Brazil",
+        "state": "Rio de Janeiro",
+        "dev_status": "Producer",
+        "url": ""
+      }
+    }
+  ]
+}

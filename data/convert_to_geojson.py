@@ -1,13 +1,20 @@
 import csv
 import json
+import os
 
 print("Converting MRDS CSV to GeoJSON...")
+
+# Get the directory where this script is located
+script_dir = os.path.dirname(os.path.abspath(__file__))
 
 features = []
 processed = 0
 invalid = 0
 
-with open('/tmp/gh-issue-solver-1767036443116/data/mrds.csv', 'r', encoding='utf-8', errors='replace') as f:
+input_path = os.path.join(script_dir, 'mrds.csv')
+print(f"Reading from: {input_path}")
+
+with open(input_path, 'r', encoding='utf-8', errors='replace') as f:
     reader = csv.DictReader(f)
     
     for row in reader:
@@ -59,7 +66,9 @@ geojson = {
 }
 
 # Save to file
-output_path = '/tmp/gh-issue-solver-1767036443116/data/mrds.geojson'
+output_path = os.path.join(script_dir, 'mrds.geojson')
+print(f"Writing to: {output_path}")
+
 with open(output_path, 'w', encoding='utf-8') as f:
     json.dump(geojson, f)
 
@@ -69,5 +78,3 @@ print(f"Valid features: {len(features)}")
 print(f"Invalid records: {invalid}")
 print(f"Output file: {output_path}")
 print(f"File size: {round(os.path.getsize(output_path) / 1024 / 1024, 2)} MB")
-
-import os
