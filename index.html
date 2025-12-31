@@ -240,22 +240,42 @@
         let viewer;
         try {
             // List of free tile providers to try (in order of preference)
+            // Includes multiple regions and types for better global coverage
             const tileProviders = [
                 {
+                    name: 'ESRI World Street Map',
+                    type: 'arcgis',
+                    url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer'
+                },
+                {
+                    name: 'ESRI World Imagery',
+                    type: 'arcgis',
+                    url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer'
+                },
+                {
+                    name: 'Carto Voyager',
+                    type: 'xyz',
+                    url: 'https://basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png'
+                },
+                {
+                    name: 'Carto Light',
+                    type: 'xyz',
+                    url: 'https://basemaps.cartocdn.com/rastertiles/light_all/{z}/{x}/{y}.png'
+                },
+                {
                     name: 'OpenStreetMap (Standard)',
+                    type: 'osm',
                     url: 'https://tile.openstreetmap.org/'
                 },
                 {
-                    name: 'OpenStreetMap France',
-                    url: 'https://a.tile.openstreetmap.fr/osmfr/'
+                    name: 'OpenStreetMap DE',
+                    type: 'osm',
+                    url: 'https://tile.openstreetmap.de/'
                 },
                 {
-                    name: 'OpenStreetMap Humanitarian',
-                    url: 'https://a.tile.openstreetmap.fr/hot/'
-                },
-                {
-                    name: 'Stamen Terrain (Stadia)',
-                    url: 'https://tiles.stadiamaps.com/tiles/stamen_terrain/'
+                    name: 'Natural Earth (Built-in)',
+                    type: 'natural_earth',
+                    url: null  // Uses built-in Cesium textures
                 }
             ];
 
@@ -289,8 +309,35 @@
             let currentProviderIndex = 0;
             let providerSwitchInProgress = false;
 
-            // Function to add imagery layer with error handling
-            function addImageryLayer(providerIndex) {
+            // Function to create imagery provider based on type (async for some providers)
+            async function createImageryProvider(provider) {
+                switch (provider.type) {
+                    case 'arcgis':
+                        // ArcGisMapServerImageryProvider uses async factory in Cesium 1.104+
+                        return await Cesium.ArcGisMapServerImageryProvider.fromUrl(provider.url);
+                    case 'xyz':
+                        return new Cesium.UrlTemplateImageryProvider({
+                            url: provider.url,
+                            credit: 'Map tiles by Carto'
+                        });
+                    case 'osm':
+                        return new Cesium.OpenStreetMapImageryProvider({
+                            url: provider.url
+                        });
+                    case 'natural_earth':
+                        // TileMapServiceImageryProvider uses async factory in Cesium 1.104+
+                        return await Cesium.TileMapServiceImageryProvider.fromUrl(
+                            Cesium.buildModuleUrl('Assets/Textures/NaturalEarthII')
+                        );
+                    default:
+                        return new Cesium.OpenStreetMapImageryProvider({
+                            url: provider.url
+                        });
+                }
+            }
+
+            // Function to add imagery layer with error handling (async)
+            async function addImageryLayer(providerIndex) {
                 if (providerIndex >= tileProviders.length) {
                     console.error('All tile providers failed. Globe will display without map tiles.');
                     console.warn('You may need to check your internet connection or firewall settings.');
@@ -301,21 +348,24 @@
                 console.log(`Trying tile provider: ${provider.name}`);
 
                 try {
-                    const imageryProvider = new Cesium.OpenStreetMapImageryProvider({
-                        url: provider.url
-                    });
-
+                    const imageryProvider = await createImageryProvider(provider);
                     const layer = viewer.scene.globe.imageryLayers.addImageryProvider(imageryProvider);
+
+                    // Natural Earth is built-in and always works
+                    if (provider.type === 'natural_earth') {
+                        console.log(`Using built-in ${provider.name} - this is the fallback option`);
+                        return;
+                    }
 
                     // Set up error handling for this layer
                     let errorCount = 0;
-                    const maxErrors = 5;  // Switch provider after 5 consecutive errors
+                    const maxErrors = 3;  // Switch provider after 3 consecutive errors (faster switching)
 
                     imageryProvider.errorEvent.addEventListener(function(error) {
                         errorCount++;
                         tilesFailedCount++;
 
-                        if (errorCount <= 3) {
+                        if (errorCount <= 2) {
                             console.warn(`Tile load error from ${provider.name}:`, error.message || error);
                         }
 
@@ -335,34 +385,36 @@
                             setTimeout(function() {
                                 providerSwitchInProgress = false;
                                 addImageryLayer(currentProviderIndex);
-                            }, 500);
+                            }, 300);
                         }
                     });
 
                     // Track successful loads by monitoring tile progress
                     let hadSuccessfulLoad = false;
-                    viewer.scene.globe.tileLoadProgressEvent.addEventListener(function(queuedTileCount) {
+                    let progressListener = function(queuedTileCount) {
                         if (!hadSuccessfulLoad && queuedTileCount > 0) {
                             // Tiles are being queued, provider is working
                             hadSuccessfulLoad = true;
                             tilesLoadedCount++;
-                            console.log(`Map tiles loading successfully from ${provider.name}`);
+                            console.log(`✓ Map tiles loading successfully from ${provider.name}`);
                         }
-                    });
+                    };
+                    viewer.scene.globe.tileLoadProgressEvent.addEventListener(progressListener);
 
-                    // Check if tiles are loading after a delay
+                    // Check if tiles are loading after a delay (reduced from 5s to 3s)
                     setTimeout(function() {
                         if (!hadSuccessfulLoad && tilesFailedCount === 0 && !providerSwitchInProgress) {
                             console.warn(`No tile activity from ${provider.name}, trying next provider...`);
                             providerSwitchInProgress = true;
                             viewer.scene.globe.imageryLayers.remove(layer);
+                            viewer.scene.globe.tileLoadProgressEvent.removeEventListener(progressListener);
                             currentProviderIndex++;
                             setTimeout(function() {
                                 providerSwitchInProgress = false;
                                 addImageryLayer(currentProviderIndex);
-                            }, 500);
+                            }, 300);
                         }
-                    }, 5000);
+                    }, 3000);
 
                 } catch (e) {
                     console.warn(`Failed to create provider ${provider.name}:`, e);
@@ -602,32 +654,37 @@
                     return;
                 }
 
-                // Handle PointPrimitive clicks (used for large datasets)
-                if (Cesium.defined(pickedObject.primitive)) {
-                    // Check if it's from our PointPrimitiveCollection
-                    if (currentDataSource && currentDataSource.primitives &&
-                        currentDataSource.featureData) {
+                // Debug: Log picked object structure (remove in production)
+                console.log('Picked object:', pickedObject);
 
-                        // The picked primitive could be a PointPrimitive with an id
-                        const primitive = pickedObject.primitive;
-                        const pointId = pickedObject.id;
+                // Handle PointPrimitive clicks (used for large datasets >10,000)
+                if (currentDataSource && currentDataSource.primitives && currentDataSource.featureData) {
+                    // For PointPrimitiveCollection, the primitive is the PointPrimitive itself
+                    // and it has an 'id' property we set when adding points
+                    const primitive = pickedObject.primitive;
 
-                        // Try to get the id from the primitive itself or from pickedObject
-                        let featureIndex = null;
-                        if (typeof pointId === 'number') {
-                            featureIndex = pointId;
-                        } else if (primitive && typeof primitive.id === 'number') {
-                            featureIndex = primitive.id;
+                    // Check if this is a PointPrimitive from our collection
+                    if (primitive && primitive.id !== undefined) {
+                        const featureIndex = primitive.id;
+                        if (typeof featureIndex === 'number' && currentDataSource.featureData[featureIndex]) {
+                            console.log('Clicked point index:', featureIndex);
+                            showFeatureInfo(currentDataSource.featureData[featureIndex]);
+                            return;
                         }
+                    }
 
-                        if (featureIndex !== null && currentDataSource.featureData[featureIndex]) {
+                    // Alternative: check pickedObject.id directly
+                    if (pickedObject.id !== undefined) {
+                        const featureIndex = pickedObject.id;
+                        if (typeof featureIndex === 'number' && currentDataSource.featureData[featureIndex]) {
+                            console.log('Clicked point index (via pickedObject.id):', featureIndex);
                             showFeatureInfo(currentDataSource.featureData[featureIndex]);
                             return;
                         }
                     }
                 }
 
-                // Handle Entity clicks (used for small datasets)
+                // Handle Entity clicks (used for small datasets <10,000)
                 if (Cesium.defined(pickedObject.id) && pickedObject.id instanceof Cesium.Entity) {
                     // Entity clicks are handled automatically by Cesium
                     return;
