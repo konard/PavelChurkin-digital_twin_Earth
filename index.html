@@ -240,18 +240,27 @@
         let viewer;
         try {
             // Create imagery provider with multiple fallback options
+            // Note: We'll try OpenStreetMap first, then fallback to Cesium World Imagery if needed
             let imageryProvider;
             try {
-                // Try OpenStreetMap first (works in most countries)
+                // Try OpenStreetMap first (free, works in most regions)
                 imageryProvider = new Cesium.OpenStreetMapImageryProvider({
                     url: 'https://tile.openstreetmap.org/'
                 });
+                console.log('Using OpenStreetMap as base layer');
             } catch (e) {
-                console.warn('OpenStreetMap provider failed, using offline single tile:', e);
-                // Fallback: Use a single color tile (offline mode)
-                imageryProvider = new Cesium.SingleTileImageryProvider({
-                    url: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=='
-                });
+                console.warn('OpenStreetMap provider initialization failed, trying Cesium World Imagery:', e);
+                try {
+                    // Fallback to Cesium World Imagery (requires Cesium Ion but works offline if cached)
+                    imageryProvider = Cesium.createWorldImagery();
+                    console.log('Using Cesium World Imagery as fallback');
+                } catch (e2) {
+                    console.error('All imagery providers failed:', e2);
+                    // Last resort: use single tile imagery
+                    imageryProvider = new Cesium.SingleTileImageryProvider({
+                        url: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=='
+                    });
+                }
             }
 
             viewer = new Cesium.Viewer('cesiumContainer', {
@@ -276,6 +285,50 @@
 
             // Set globe color to show land/ocean differentiation
             viewer.scene.globe.showGroundAtmosphere = true;
+
+            // Monitor tile loading to detect if imagery layer is working
+            let tilesLoadedCount = 0;
+            let tilesFailedCount = 0;
+            viewer.scene.globe.tileLoadProgressEvent.addEventListener(function(queuedTileCount) {
+                if (queuedTileCount === 0 && tilesLoadedCount === 0 && tilesFailedCount === 0) {
+                    // No tiles loaded after initialization - tiles may be blocked
+                    setTimeout(function() {
+                        if (tilesLoadedCount === 0) {
+                            console.warn('WARNING: Map tiles are not loading. The globe will display without a map background.');
+                            console.warn('This can happen due to:');
+                            console.warn('- Network restrictions or firewall blocking tile servers');
+                            console.warn('- Regional blocking of OpenStreetMap');
+                            console.warn('- CORS issues');
+                            console.warn('The mineral resource data will still work correctly.');
+                        }
+                    }, 3000);
+                }
+            });
+
+            // Track successful tile loads
+            const imageryLayer = viewer.scene.globe.imageryLayers.get(0);
+            if (imageryLayer && imageryLayer.imageryProvider) {
+                // Monitor for errors
+                if (imageryLayer.imageryProvider.errorEvent) {
+                    imageryLayer.imageryProvider.errorEvent.addEventListener(function(error) {
+                        tilesFailedCount++;
+                        if (tilesFailedCount === 1) {
+                            console.error('Imagery provider error:', error);
+                        }
+                    });
+                }
+
+                // Monitor for successful loads
+                if (imageryLayer.imageryProvider.readyPromise) {
+                    imageryLayer.imageryProvider.readyPromise.then(function() {
+                        console.log('Imagery provider ready');
+                        tilesLoadedCount++;
+                    }).catch(function(error) {
+                        console.error('Imagery provider failed to initialize:', error);
+                        tilesFailedCount++;
+                    });
+                }
+            }
         } catch (error) {
             console.error('Failed to initialize Cesium Viewer:', error);
             document.body.innerHTML = `
@@ -634,10 +687,11 @@
 
             // Use setTimeout to allow UI to update before filtering starts
             setTimeout(function() {
+                let dataToDisplay;
                 if (selectedCommodity === '') {
-                    displayData(allData);
+                    dataToDisplay = allData;
                 } else {
-                    const filtered = {
+                    dataToDisplay = {
                         type: 'FeatureCollection',
                         features: allData.features.filter(f =>
                             f.properties.commodity === selectedCommodity ||
@@ -645,11 +699,13 @@
                             f.properties.commodity3 === selectedCommodity
                         )
                     };
-                    displayData(filtered);
                 }
 
-                // Hide loading for small datasets (large datasets hide it in displayData)
-                if (!allData || allData.features.length <= 10000) {
+                displayData(dataToDisplay);
+
+                // Hide loading for small datasets (large datasets hide it in displayData batch processing)
+                // IMPORTANT: Check the FILTERED dataset size, not the original allData size
+                if (dataToDisplay.features.length <= 10000) {
                     loadingDiv.classList.add('hidden');
                 }
             }, 100);
