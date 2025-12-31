@@ -239,30 +239,27 @@
         // Initialize the Cesium Viewer with fallback imagery options
         let viewer;
         try {
-            // Create imagery provider with multiple fallback options
-            // Note: We'll try OpenStreetMap first, then fallback to Cesium World Imagery if needed
-            let imageryProvider;
-            try {
-                // Try OpenStreetMap first (free, works in most regions)
-                imageryProvider = new Cesium.OpenStreetMapImageryProvider({
+            // List of free tile providers to try (in order of preference)
+            const tileProviders = [
+                {
+                    name: 'OpenStreetMap (Standard)',
                     url: 'https://tile.openstreetmap.org/'
-                });
-                console.log('Using OpenStreetMap as base layer');
-            } catch (e) {
-                console.warn('OpenStreetMap provider initialization failed, trying Cesium World Imagery:', e);
-                try {
-                    // Fallback to Cesium World Imagery (requires Cesium Ion but works offline if cached)
-                    imageryProvider = Cesium.createWorldImagery();
-                    console.log('Using Cesium World Imagery as fallback');
-                } catch (e2) {
-                    console.error('All imagery providers failed:', e2);
-                    // Last resort: use single tile imagery
-                    imageryProvider = new Cesium.SingleTileImageryProvider({
-                        url: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=='
-                    });
+                },
+                {
+                    name: 'OpenStreetMap France',
+                    url: 'https://a.tile.openstreetmap.fr/osmfr/'
+                },
+                {
+                    name: 'OpenStreetMap Humanitarian',
+                    url: 'https://a.tile.openstreetmap.fr/hot/'
+                },
+                {
+                    name: 'Stamen Terrain (Stadia)',
+                    url: 'https://tiles.stadiamaps.com/tiles/stamen_terrain/'
                 }
-            }
+            ];
 
+            // Create viewer without imagery first, then add layers
             viewer = new Cesium.Viewer('cesiumContainer', {
                 baseLayerPicker: false,  // Disable base layer picker to avoid Ion dependency
                 geocoder: false,  // Disable geocoder (requires Ion)
@@ -273,12 +270,12 @@
                 timeline: false,
                 fullscreenButton: true,
                 vrButton: false,
-                imageryProvider: imageryProvider,
+                imageryProvider: false,  // Don't add default imagery - we'll add our own
                 terrainProvider: new Cesium.EllipsoidTerrainProvider()  // Use simple ellipsoid terrain
             });
 
             // Show a simple land/ocean coloring using the globe's base color
-            viewer.scene.globe.baseColor = Cesium.Color.fromCssColorString('#2C3E50');
+            viewer.scene.globe.baseColor = Cesium.Color.fromCssColorString('#1a3a52');
 
             // Enable lighting for better visual appearance
             viewer.scene.globe.enableLighting = false;  // Disable lighting to avoid shadows on blue globe
@@ -286,49 +283,96 @@
             // Set globe color to show land/ocean differentiation
             viewer.scene.globe.showGroundAtmosphere = true;
 
-            // Monitor tile loading to detect if imagery layer is working
+            // Track tile loading status
             let tilesLoadedCount = 0;
             let tilesFailedCount = 0;
-            viewer.scene.globe.tileLoadProgressEvent.addEventListener(function(queuedTileCount) {
-                if (queuedTileCount === 0 && tilesLoadedCount === 0 && tilesFailedCount === 0) {
-                    // No tiles loaded after initialization - tiles may be blocked
+            let currentProviderIndex = 0;
+            let providerSwitchInProgress = false;
+
+            // Function to add imagery layer with error handling
+            function addImageryLayer(providerIndex) {
+                if (providerIndex >= tileProviders.length) {
+                    console.error('All tile providers failed. Globe will display without map tiles.');
+                    console.warn('You may need to check your internet connection or firewall settings.');
+                    return;
+                }
+
+                const provider = tileProviders[providerIndex];
+                console.log(`Trying tile provider: ${provider.name}`);
+
+                try {
+                    const imageryProvider = new Cesium.OpenStreetMapImageryProvider({
+                        url: provider.url
+                    });
+
+                    const layer = viewer.scene.globe.imageryLayers.addImageryProvider(imageryProvider);
+
+                    // Set up error handling for this layer
+                    let errorCount = 0;
+                    const maxErrors = 5;  // Switch provider after 5 consecutive errors
+
+                    imageryProvider.errorEvent.addEventListener(function(error) {
+                        errorCount++;
+                        tilesFailedCount++;
+
+                        if (errorCount <= 3) {
+                            console.warn(`Tile load error from ${provider.name}:`, error.message || error);
+                        }
+
+                        // If too many errors, try next provider
+                        if (errorCount >= maxErrors && !providerSwitchInProgress) {
+                            providerSwitchInProgress = true;
+                            console.warn(`Too many errors from ${provider.name}, trying next provider...`);
+
+                            // Remove the failing layer
+                            viewer.scene.globe.imageryLayers.remove(layer);
+
+                            // Reset counters and try next provider
+                            tilesLoadedCount = 0;
+                            tilesFailedCount = 0;
+                            currentProviderIndex++;
+
+                            setTimeout(function() {
+                                providerSwitchInProgress = false;
+                                addImageryLayer(currentProviderIndex);
+                            }, 500);
+                        }
+                    });
+
+                    // Track successful loads by monitoring tile progress
+                    let hadSuccessfulLoad = false;
+                    viewer.scene.globe.tileLoadProgressEvent.addEventListener(function(queuedTileCount) {
+                        if (!hadSuccessfulLoad && queuedTileCount > 0) {
+                            // Tiles are being queued, provider is working
+                            hadSuccessfulLoad = true;
+                            tilesLoadedCount++;
+                            console.log(`Map tiles loading successfully from ${provider.name}`);
+                        }
+                    });
+
+                    // Check if tiles are loading after a delay
                     setTimeout(function() {
-                        if (tilesLoadedCount === 0) {
-                            console.warn('WARNING: Map tiles are not loading. The globe will display without a map background.');
-                            console.warn('This can happen due to:');
-                            console.warn('- Network restrictions or firewall blocking tile servers');
-                            console.warn('- Regional blocking of OpenStreetMap');
-                            console.warn('- CORS issues');
-                            console.warn('The mineral resource data will still work correctly.');
+                        if (!hadSuccessfulLoad && tilesFailedCount === 0 && !providerSwitchInProgress) {
+                            console.warn(`No tile activity from ${provider.name}, trying next provider...`);
+                            providerSwitchInProgress = true;
+                            viewer.scene.globe.imageryLayers.remove(layer);
+                            currentProviderIndex++;
+                            setTimeout(function() {
+                                providerSwitchInProgress = false;
+                                addImageryLayer(currentProviderIndex);
+                            }, 500);
                         }
-                    }, 3000);
-                }
-            });
+                    }, 5000);
 
-            // Track successful tile loads
-            const imageryLayer = viewer.scene.globe.imageryLayers.get(0);
-            if (imageryLayer && imageryLayer.imageryProvider) {
-                // Monitor for errors
-                if (imageryLayer.imageryProvider.errorEvent) {
-                    imageryLayer.imageryProvider.errorEvent.addEventListener(function(error) {
-                        tilesFailedCount++;
-                        if (tilesFailedCount === 1) {
-                            console.error('Imagery provider error:', error);
-                        }
-                    });
-                }
-
-                // Monitor for successful loads
-                if (imageryLayer.imageryProvider.readyPromise) {
-                    imageryLayer.imageryProvider.readyPromise.then(function() {
-                        console.log('Imagery provider ready');
-                        tilesLoadedCount++;
-                    }).catch(function(error) {
-                        console.error('Imagery provider failed to initialize:', error);
-                        tilesFailedCount++;
-                    });
+                } catch (e) {
+                    console.warn(`Failed to create provider ${provider.name}:`, e);
+                    addImageryLayer(providerIndex + 1);
                 }
             }
+
+            // Start with first provider
+            addImageryLayer(0);
+
         } catch (error) {
             console.error('Failed to initialize Cesium Viewer:', error);
             document.body.innerHTML = `
@@ -372,6 +416,7 @@
         let allData = null;
         let currentDataSource = null;
         let commodities = new Set();
+        let clickHandler = null;  // Global click handler to avoid creating multiple handlers
 
         // Russian translations for commodity names
         const commodityTranslations = {
@@ -520,6 +565,77 @@
             }
         }
 
+        // Helper function to show info box with feature data
+        function showFeatureInfo(coords) {
+            const commodity = coords.commodity || 'Unknown';
+
+            // Create description with Russian translations
+            const description = `
+                <div style="font-family: 'Segoe UI', sans-serif; max-width: 300px;">
+                    <h3 style="margin-bottom: 10px; color: #4FC3F7;">${coords.name || 'Без названия'}</h3>
+                    <p style="margin: 5px 0;"><strong>Ресурс:</strong> ${translateCommodity(commodity)}</p>
+                    ${coords.commodity2 ? `<p style="margin: 5px 0;"><strong>Доп. ресурс:</strong> ${translateCommodity(coords.commodity2)}</p>` : ''}
+                    ${coords.commodity3 ? `<p style="margin: 5px 0;"><strong>Доп. ресурс:</strong> ${translateCommodity(coords.commodity3)}</p>` : ''}
+                    <p style="margin: 5px 0;"><strong>Страна:</strong> ${coords.country || 'Неизвестно'}</p>
+                    ${coords.state ? `<p style="margin: 5px 0;"><strong>Штат/Регион:</strong> ${coords.state}</p>` : ''}
+                    <p style="margin: 5px 0;"><strong>Статус:</strong> ${coords.dev_status || 'Неизвестно'}</p>
+                    ${coords.url ? `<p style="margin: 5px 0;"><a href="${coords.url}" target="_blank" style="color: #4FC3F7;">Подробнее</a></p>` : ''}
+                </div>
+            `;
+
+            viewer.selectedEntity = undefined;
+            viewer.infoBox.frame.innerHTML = description;
+            viewer.infoBox.viewModel.showInfo = true;
+        }
+
+        // Setup global click handler (called once)
+        function setupClickHandler() {
+            if (clickHandler) {
+                return;  // Already set up
+            }
+
+            clickHandler = new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas);
+            clickHandler.setInputAction(function(click) {
+                const pickedObject = viewer.scene.pick(click.position);
+
+                if (!Cesium.defined(pickedObject)) {
+                    return;
+                }
+
+                // Handle PointPrimitive clicks (used for large datasets)
+                if (Cesium.defined(pickedObject.primitive)) {
+                    // Check if it's from our PointPrimitiveCollection
+                    if (currentDataSource && currentDataSource.primitives &&
+                        currentDataSource.featureData) {
+
+                        // The picked primitive could be a PointPrimitive with an id
+                        const primitive = pickedObject.primitive;
+                        const pointId = pickedObject.id;
+
+                        // Try to get the id from the primitive itself or from pickedObject
+                        let featureIndex = null;
+                        if (typeof pointId === 'number') {
+                            featureIndex = pointId;
+                        } else if (primitive && typeof primitive.id === 'number') {
+                            featureIndex = primitive.id;
+                        }
+
+                        if (featureIndex !== null && currentDataSource.featureData[featureIndex]) {
+                            showFeatureInfo(currentDataSource.featureData[featureIndex]);
+                            return;
+                        }
+                    }
+                }
+
+                // Handle Entity clicks (used for small datasets)
+                if (Cesium.defined(pickedObject.id) && pickedObject.id instanceof Cesium.Entity) {
+                    // Entity clicks are handled automatically by Cesium
+                    return;
+                }
+
+            }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
+        }
+
         // Display data on globe using efficient PointPrimitiveCollection
         function displayData(geojson) {
             // Remove previous data if exists
@@ -531,7 +647,11 @@
                     // Remove data source
                     viewer.dataSources.remove(currentDataSource);
                 }
+                currentDataSource = null;
             }
+
+            // Ensure click handler is set up
+            setupClickHandler();
 
             let displayedCount = 0;
 
@@ -560,7 +680,7 @@
                         const lat = feature.geometry.coordinates[1];
                         const commodity = coords.commodity || 'Unknown';
 
-                        const point = pointPrimitives.add({
+                        pointPrimitives.add({
                             position: Cesium.Cartesian3.fromDegrees(lon, lat),
                             pixelSize: 6,
                             color: getColorForCommodity(commodity),
@@ -591,45 +711,12 @@
                 // Start loading batches
                 addBatch();
 
-                // Store reference for cleanup
+                // Store reference for cleanup and click handling
                 currentDataSource = {
                     primitives: pointPrimitives,
                     featureData: featureData,
                     geojson: geojson
                 };
-
-                // Add click handler for point primitives
-                const handler = new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas);
-                handler.setInputAction(function(click) {
-                    const pickedObject = viewer.scene.pick(click.position);
-                    if (Cesium.defined(pickedObject) && Cesium.defined(pickedObject.primitive) &&
-                        pickedObject.primitive instanceof Cesium.PointPrimitive) {
-
-                        const pointId = pickedObject.primitive.id;
-                        if (featureData[pointId]) {
-                            const coords = featureData[pointId];
-                            const commodity = coords.commodity || 'Unknown';
-
-                            // Create description with Russian translations
-                            const description = `
-                                <div style="font-family: 'Segoe UI', sans-serif; max-width: 300px;">
-                                    <h3 style="margin-bottom: 10px; color: #4FC3F7;">${coords.name || 'Без названия'}</h3>
-                                    <p style="margin: 5px 0;"><strong>Ресурс:</strong> ${translateCommodity(commodity)}</p>
-                                    ${coords.commodity2 ? `<p style="margin: 5px 0;"><strong>Доп. ресурс:</strong> ${translateCommodity(coords.commodity2)}</p>` : ''}
-                                    ${coords.commodity3 ? `<p style="margin: 5px 0;"><strong>Доп. ресурс:</strong> ${translateCommodity(coords.commodity3)}</p>` : ''}
-                                    <p style="margin: 5px 0;"><strong>Страна:</strong> ${coords.country || 'Неизвестно'}</p>
-                                    ${coords.state ? `<p style="margin: 5px 0;"><strong>Штат/Регион:</strong> ${coords.state}</p>` : ''}
-                                    <p style="margin: 5px 0;"><strong>Статус:</strong> ${coords.dev_status || 'Неизвестно'}</p>
-                                    ${coords.url ? `<p style="margin: 5px 0;"><a href="${coords.url}" target="_blank" style="color: #4FC3F7;">Подробнее</a></p>` : ''}
-                                </div>
-                            `;
-
-                            viewer.selectedEntity = undefined;
-                            viewer.infoBox.frame.innerHTML = description;
-                            viewer.infoBox.viewModel.showInfo = true;
-                        }
-                    }
-                }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
 
             } else {
                 // For smaller datasets (<10,000 points), use entity-based rendering with click info
